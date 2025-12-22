@@ -1,0 +1,220 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://httptool.dev/schemas/ir/v1",
+  "title": "HTTP Execution IR v1",
+  "description": "Canonical Intermediate Representation for HTTP requests",
+  "type": "object",
+  "required": ["version", "request"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "IR schema version"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique request identifier"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["curl", "k6", "locust", "postman", "har", "manual", "openapi"],
+          "description": "Origin of this IR"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "trace_id": {
+          "type": "string",
+          "description": "Distributed tracing ID"
+        },
+        "tags": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": ["method", "url"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT"]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Full URL including scheme"
+        },
+        "query": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {"type": "string"},
+              {"type": "array", "items": {"type": "string"}}
+            ]
+          }
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        },
+        "cookies": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "json"},
+                "content": {}
+              },
+              "required": ["type", "content"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "form"},
+                "content": {
+                  "type": "object",
+                  "additionalProperties": {"type": "string"}
+                }
+              },
+              "required": ["type", "content"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "text"},
+                "content": {"type": "string"}
+              },
+              "required": ["type", "content"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "multipart"},
+                "content": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {"type": "string"},
+                      "value": {"type": "string"},
+                      "filename": {"type": "string"},
+                      "content_type": {"type": "string"}
+                    },
+                    "required": ["name"]
+                  }
+                }
+              },
+              "required": ["type", "content"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "binary"},
+                "content_base64": {"type": "string"}
+              },
+              "required": ["type", "content_base64"]
+            }
+          ]
+        },
+        "auth": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "basic"},
+                "username": {"type": "string"},
+                "password": {"type": "string"}
+              },
+              "required": ["type", "username", "password"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "bearer"},
+                "token": {"type": "string"}
+              },
+              "required": ["type", "token"]
+            }
+          ]
+        }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "properties": {
+        "tls_verify": {
+          "type": "boolean",
+          "default": true
+        },
+        "follow_redirects": {
+          "type": "boolean",
+          "default": true
+        },
+        "max_redirects": {
+          "type": "integer",
+          "default": 10
+        },
+        "proxy": {
+          "type": "string",
+          "format": "uri"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 30000
+        },
+        "client_cert": {
+          "type": "string"
+        },
+        "client_key": {
+          "type": "string"
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "properties": {
+        "pre_request": {
+          "type": "string",
+          "description": "Evaluator script to run before request"
+        },
+        "post_response": {
+          "type": "string",
+          "description": "Evaluator script to run after response"
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "properties": {
+        "evaluator": {
+          "type": "string",
+          "enum": ["bun", "python", "go", "wasm"],
+          "default": "bun"
+        },
+        "evaluator_path": {
+          "type": "string",
+          "description": "Path to custom evaluator"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 5000
+        },
+        "vars": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Variables passed to evaluator"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,95 @@
+# Real-World Example: List Posts → Fetch Each Post Detail
+#
+# This demonstrates the common pattern:
+# 1. Call API that returns a list/array
+# 2. For each item in the response, make another API call
+#
+# Perfect for:
+# - List users → Get each user's profile
+# - List products → Get each product details
+# - List orders → Get each order details
+# - List posts → Get each post
+
+var api_base = "https://jsonplaceholder.typicode.com"
+
+# First curl: Get list of posts
+request get_all_posts {
+  curl ${api_base}/posts
+
+  # The response is an array of posts
+  # We'll extract the entire array and also specific posts
+
+  extract {
+    # Extract first 3 post IDs (you can extract the whole array too)
+    post_id_1 = $[0].id
+    post_id_2 = $[1].id
+    post_id_3 = $[2].id
+    first_post_title = $[0].title
+  }
+
+  assert {
+    status == 200
+    latency < 2000
+  }
+}
+
+# Second curl: Get individual post details (runs multiple times)
+request get_post_by_id_1 {
+  curl ${api_base}/posts/${post_id_1}
+
+  assert {
+    status == 200
+    body.id == ${post_id_1}
+  }
+}
+
+request get_post_by_id_2 {
+  curl ${api_base}/posts/${post_id_2}
+
+  assert {
+    status == 200
+    body.id == ${post_id_2}
+  }
+}
+
+request get_post_by_id_3 {
+  curl ${api_base}/posts/${post_id_3}
+
+  assert {
+    status == 200
+    body.id == ${post_id_3}
+  }
+}
+
+# Load test scenario
+scenario posts_flow {
+  load {
+    vus = 5
+    duration = 30s
+  }
+
+  # Sequential: Get list, then get each post
+  run get_all_posts {
+    run get_post_by_id_1
+    run get_post_by_id_2
+    run get_post_by_id_3
+  }
+}
+
+# Alternative: Parallel fetching
+scenario posts_flow_parallel {
+  load {
+    vus = 3
+    duration = 20s
+  }
+
+  # Get list first
+  run get_all_posts
+
+  # Then fetch all posts in parallel (faster)
+  parallel {
+    run get_post_by_id_1
+    run get_post_by_id_2
+    run get_post_by_id_3
+  }
+}

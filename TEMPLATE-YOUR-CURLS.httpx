@@ -1,0 +1,85 @@
+# TEMPLATE: Replace with Your 2 Curl Commands
+#
+# Instructions:
+# 1. Replace the two curl commands below with yours
+# 2. Adjust the extraction JSONPath based on your response
+# 3. Run: ./bin/httptool scenario run TEMPLATE-YOUR-CURLS.httpx
+
+var base_url = "YOUR_API_BASE_URL_HERE"
+
+# ============================================================
+# FIRST CURL: Get List of Posts
+# ============================================================
+request get_posts_list {
+  # 👇 REPLACE THIS ENTIRE LINE with your first curl
+  curl ${base_url}/api/posts
+
+  # 👇 ADJUST JSONPath based on your response structure
+  # Examples:
+  #   If response is: [{"id": 1}, {"id": 2}]
+  #   Use: id_1 = $[0].id
+  #
+  #   If response is: {"data": {"items": [{"id": 1}]}}
+  #   Use: id_1 = $.data.items[0].id
+  #
+  extract {
+    post_id_1 = $[0].id
+    post_id_2 = $[1].id
+    post_id_3 = $[2].id
+  }
+
+  assert status == 200
+}
+
+# ============================================================
+# SECOND CURL: Get Single Post Detail (Post 1)
+# ============================================================
+request get_post_detail_1 {
+  # 👇 REPLACE THIS with your second curl
+  # Use ${post_id_1} to reference the extracted ID
+  curl ${base_url}/api/posts/${post_id_1}
+
+  assert status == 200
+}
+
+# ============================================================
+# SECOND CURL: Get Single Post Detail (Post 2)
+# ============================================================
+request get_post_detail_2 {
+  curl ${base_url}/api/posts/${post_id_2}
+  assert status == 200
+}
+
+# ============================================================
+# SECOND CURL: Get Single Post Detail (Post 3)
+# ============================================================
+request get_post_detail_3 {
+  curl ${base_url}/api/posts/${post_id_3}
+  assert status == 200
+}
+
+# ============================================================
+# SCENARIO: Run the load test
+# ============================================================
+scenario my_load_test {
+  load {
+    vus = 5        # 👈 Number of concurrent users
+    duration = 30s  # 👈 How long to run
+  }
+
+  # Execute: List → Detail1 → Detail2 → Detail3
+  run get_posts_list -> get_post_detail_1 -> get_post_detail_2 -> get_post_detail_3
+}
+
+
+# ============================================================
+# HOW TO RUN:
+# ============================================================
+# 1. Validate:
+#    ./bin/httptool scenario validate TEMPLATE-YOUR-CURLS.httpx
+#
+# 2. Dry run (no execution):
+#    ./bin/httptool scenario run TEMPLATE-YOUR-CURLS.httpx --dry-run
+#
+# 3. Execute:
+#    ./bin/httptool scenario run TEMPLATE-YOUR-CURLS.httpx

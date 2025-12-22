@@ -1,0 +1,86 @@
+# Parallel Requests Example
+# Simulates dashboard loading multiple API endpoints simultaneously
+
+var base_url = "https://httpbin.org"
+
+# Authentication
+request login {
+  curl -X POST ${base_url}/post \
+    -d '{"email":"test@example.com","password":"secret"}'
+
+  extract {
+    token = $.headers.X-Request-Id
+  }
+
+  assert status == 200
+}
+
+# Dashboard endpoints (all loaded in parallel)
+request get_user {
+  curl ${base_url}/get?endpoint=user
+
+  assert {
+    status == 200
+    latency < 500
+  }
+}
+
+request get_notifications {
+  curl ${base_url}/get?endpoint=notifications
+
+  assert status == 200
+}
+
+request get_activity_feed {
+  curl ${base_url}/get?endpoint=feed
+
+  assert status == 200
+}
+
+request get_stats {
+  curl ${base_url}/get?endpoint=stats
+
+  assert status == 200
+}
+
+request get_messages {
+  curl ${base_url}/get?endpoint=messages
+
+  assert status == 200
+}
+
+# Scenario: Load dashboard
+scenario dashboard_load {
+  load {
+    vus = 20
+    duration = 2m
+  }
+
+  # Login first
+  run login
+
+  # Then load all dashboard data in parallel
+  parallel {
+    run get_user
+    run get_notifications
+    run get_activity_feed
+    run get_stats
+    run get_messages
+  }
+}
+
+# Alternative: High-load spike test
+scenario spike_test {
+  load {
+    stage { duration = 1m, vus = 10 }
+    stage { duration = 10s, vus = 100 }  # Spike!
+    stage { duration = 1m, vus = 10 }
+  }
+
+  run login
+  parallel {
+    run get_user
+    run get_notifications
+    run get_stats
+  }
+}

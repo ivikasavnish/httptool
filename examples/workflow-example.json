@@ -1,0 +1,201 @@
+{
+  "name": "User Registration and Login Workflow",
+  "description": "Complete workflow demonstrating IR capabilities",
+  "steps": [
+    {
+      "name": "Step 1: Register User",
+      "ir": {
+        "version": "1.0",
+        "metadata": {
+          "source": "manual",
+          "tags": {
+            "workflow": "registration",
+            "step": "1"
+          }
+        },
+        "request": {
+          "method": "POST",
+          "url": "https://api.example.com/register",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "type": "json",
+            "content": {
+              "email": "user@example.com",
+              "password": "SecurePassword123!",
+              "name": "John Doe"
+            }
+          }
+        },
+        "transport": {
+          "tls_verify": true,
+          "follow_redirects": true,
+          "max_redirects": 10,
+          "timeout_ms": 30000
+        },
+        "evaluation": {
+          "evaluator": "bun",
+          "timeout_ms": 5000,
+          "vars": {
+            "expect_user_id": true
+          }
+        }
+      }
+    },
+    {
+      "name": "Step 2: Verify Email",
+      "ir": {
+        "version": "1.0",
+        "metadata": {
+          "source": "manual",
+          "tags": {
+            "workflow": "registration",
+            "step": "2"
+          }
+        },
+        "request": {
+          "method": "POST",
+          "url": "https://api.example.com/verify-email",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "type": "json",
+            "content": {
+              "token": "${verification_token}"
+            }
+          }
+        },
+        "transport": {
+          "tls_verify": true,
+          "follow_redirects": true,
+          "max_redirects": 10,
+          "timeout_ms": 30000
+        },
+        "evaluation": {
+          "evaluator": "bun",
+          "timeout_ms": 5000,
+          "vars": {
+            "verification_token": "extracted_from_step1"
+          }
+        }
+      }
+    },
+    {
+      "name": "Step 3: Login",
+      "ir": {
+        "version": "1.0",
+        "metadata": {
+          "source": "manual",
+          "tags": {
+            "workflow": "registration",
+            "step": "3"
+          }
+        },
+        "request": {
+          "method": "POST",
+          "url": "https://api.example.com/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "type": "json",
+            "content": {
+              "email": "user@example.com",
+              "password": "SecurePassword123!"
+            }
+          }
+        },
+        "transport": {
+          "tls_verify": true,
+          "follow_redirects": true,
+          "max_redirects": 10,
+          "timeout_ms": 30000
+        },
+        "evaluation": {
+          "evaluator": "bun",
+          "timeout_ms": 5000,
+          "vars": {
+            "expect_auth_token": true
+          }
+        }
+      }
+    },
+    {
+      "name": "Step 4: Get User Profile",
+      "ir": {
+        "version": "1.0",
+        "metadata": {
+          "source": "manual",
+          "tags": {
+            "workflow": "registration",
+            "step": "4"
+          }
+        },
+        "request": {
+          "method": "GET",
+          "url": "https://api.example.com/profile",
+          "headers": {
+            "Authorization": "Bearer ${auth_token}"
+          }
+        },
+        "transport": {
+          "tls_verify": true,
+          "follow_redirects": true,
+          "max_redirects": 10,
+          "timeout_ms": 30000
+        },
+        "evaluation": {
+          "evaluator": "bun",
+          "timeout_ms": 5000,
+          "vars": {
+            "auth_token": "extracted_from_step3",
+            "validate_content": true
+          }
+        }
+      }
+    },
+    {
+      "name": "Step 5: Update Profile",
+      "ir": {
+        "version": "1.0",
+        "metadata": {
+          "source": "manual",
+          "tags": {
+            "workflow": "registration",
+            "step": "5"
+          }
+        },
+        "request": {
+          "method": "PATCH",
+          "url": "https://api.example.com/profile",
+          "headers": {
+            "Authorization": "Bearer ${auth_token}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "type": "json",
+            "content": {
+              "bio": "Software developer passionate about APIs",
+              "location": "San Francisco, CA"
+            }
+          }
+        },
+        "transport": {
+          "tls_verify": true,
+          "follow_redirects": true,
+          "max_redirects": 10,
+          "timeout_ms": 30000
+        },
+        "evaluation": {
+          "evaluator": "bun",
+          "timeout_ms": 5000,
+          "vars": {
+            "auth_token": "extracted_from_step3"
+          }
+        }
+      }
+    }
+  ]
+}

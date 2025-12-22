@@ -1,0 +1,18 @@
+# Simple Load Test Example
+# Tests API health endpoint with 100 RPS for 1 minute
+
+var base_url = "https://httpbin.org"
+
+request health {
+  curl ${base_url}/get
+
+  assert {
+    status == 200
+    latency < 1000
+  }
+}
+
+scenario smoke_test {
+  load 100 rps for 1m
+  run health
+}

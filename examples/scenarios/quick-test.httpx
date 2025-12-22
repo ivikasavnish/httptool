@@ -1,0 +1,21 @@
+# Quick Test - Small load test for demonstration
+# 5 virtual users making requests for 10 seconds
+
+var base_url = "https://httpbin.org"
+
+request test_get {
+  curl ${base_url}/get
+
+  assert {
+    status == 200
+  }
+}
+
+scenario quick {
+  load {
+    vus = 500
+    duration = 100s
+  }
+
+  run test_get
+}

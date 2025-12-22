@@ -1,0 +1,59 @@
+# Conditional Flow Example
+# Demonstrates if/else logic based on response data
+
+var base_url = "https://httpbin.org"
+
+# Check feature flag
+request check_feature {
+  curl ${base_url}/get?feature=new_api
+
+  extract {
+    feature_enabled = $.args.feature
+  }
+
+  assert status == 200
+}
+
+# New API endpoint
+request new_api {
+  curl ${base_url}/get?version=v2
+
+  assert status == 200
+}
+
+# Old API endpoint
+request old_api {
+  curl ${base_url}/get?version=v1
+
+  assert status == 200
+}
+
+# Fallback endpoint
+request fallback {
+  curl ${base_url}/status/503
+
+  retry {
+    max_attempts = 3
+    backoff = exponential
+    base_delay = 100ms
+  }
+
+  assert status in [200, 201]
+}
+
+scenario adaptive_routing {
+  load 50 rps for 2m
+
+  run check_feature
+  if ${feature_enabled} == "new_api" {
+    run new_api
+  } else {
+    run old_api
+  }
+}
+
+scenario with_retry {
+  load 10 vus for 1m
+
+  run fallback
+}

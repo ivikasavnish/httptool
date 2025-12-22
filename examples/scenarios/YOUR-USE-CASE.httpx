@@ -1,0 +1,78 @@
+# YOUR USE CASE: List API → Detail API Pattern
+#
+# Replace these with your actual curl commands
+
+# ============================================================
+# STEP 1: Replace this with your "list posts" curl command
+# ============================================================
+var base_url = "https://jsonplaceholder.typicode.com"
+
+request list_posts {
+  # 👇 REPLACE THIS with your actual curl command
+  curl ${base_url}/posts
+
+  # Extract IDs from the list response
+  # Adjust JSONPath based on your actual response structure
+  extract {
+    post_1 = $[0].id
+    post_2 = $[1].id
+    post_3 = $[2].id
+    # Add more as needed: post_4 = $[3].id, etc.
+  }
+
+  assert status == 200
+}
+
+# ============================================================
+# STEP 2: Replace this with your "get single post" curl command
+# ============================================================
+request get_post_1 {
+  # 👇 REPLACE THIS with your actual curl command
+  # Use ${post_1} to reference the extracted ID
+  curl ${base_url}/posts/${post_1}
+
+  assert status == 200
+}
+
+request get_post_2 {
+  curl ${base_url}/posts/${post_2}
+  assert status == 200
+}
+
+request get_post_3 {
+  curl ${base_url}/posts/${post_3}
+  assert status == 200
+}
+
+# ============================================================
+# SCENARIO: Test the flow
+# ============================================================
+scenario my_test {
+  load {
+    vus = 5
+    duration = 30s
+  }
+
+  # First get the list
+  run list_posts {
+    # Then get each post detail (nested)
+    run get_post_1
+    run get_post_2
+    run get_post_3
+  }
+}
+
+# Alternative: Fetch posts in parallel (faster)
+scenario my_test_parallel {
+  load {
+    vus = 3
+    duration = 20s
+  }
+
+  run list_posts
+  parallel {
+    run get_post_1
+    run get_post_2
+    run get_post_3
+  }
+}

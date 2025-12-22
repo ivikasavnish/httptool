@@ -1,0 +1,87 @@
+# Complete User Journey with Nested Requests
+# Demonstrates variable extraction, nested children, and assertions
+
+var base_url = "https://httpbin.org"
+var test_email = "user-${VU}@test.com"
+
+# Step 1: Register user
+request register {
+  curl -X POST ${base_url}/post \
+    -H "Content-Type: application/json" \
+    -d '{"email":"${test_email}","password":"test123","name":"User ${VU}"}'
+
+  extract {
+    user_id = $.json.email
+    token = $.headers.X-Request-Id
+  }
+
+  assert {
+    status == 200
+  }
+}
+
+# Step 2: Get user profile
+request get_profile {
+  curl ${base_url}/get?user=${user_id}
+
+  assert {
+    status == 200
+  }
+}
+
+# Step 3: Update profile
+request update_profile {
+  curl -X PUT ${base_url}/put \
+    -H "Content-Type: application/json" \
+    -d '{"bio":"Load test user","location":"Earth"}'
+
+  assert {
+    status == 200
+  }
+}
+
+# Step 4: Upload avatar (parallel with settings)
+request upload_avatar {
+  curl -X POST ${base_url}/post \
+    -H "Content-Type: multipart/form-data" \
+    -F "file=@avatar.jpg"
+
+  assert status == 200
+}
+
+# Step 5: Update settings (parallel with avatar)
+request update_settings {
+  curl -X PATCH ${base_url}/patch \
+    -d '{"theme":"dark","notifications":true}'
+
+  assert status == 200
+}
+
+# Main scenario: nested flow
+scenario user_journey {
+  load {
+    vus = 10
+    duration = 5m
+    ramp_up = 30s
+  }
+
+  # Sequential flow with nested children
+  run register {
+    run get_profile {
+      run update_profile {
+        # These run in parallel
+        parallel {
+          run upload_avatar
+          run update_settings
+        }
+      }
+    }
+  }
+}
+
+# Alternative scenario: simple sequential
+scenario simple_journey {
+  load 5 vus for 2m
+
+  run register -> get_profile -> update_profile
+}

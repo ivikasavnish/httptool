@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://httptool.dev/schemas/evaluator-decision/v1",
+  "title": "Evaluator Decision v1",
+  "description": "Output contract for polyglot evaluators",
+  "type": "object",
+  "required": ["decision"],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["pass", "retry", "fail", "branch"],
+      "description": "Execution decision"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable explanation of decision"
+    },
+    "mutations": {
+      "type": "object",
+      "description": "Modifications to apply for next attempt",
+      "properties": {
+        "headers": {
+          "type": "object",
+          "additionalProperties": {"type": "string"},
+          "description": "Headers to add/update"
+        },
+        "query": {
+          "type": "object",
+          "additionalProperties": {"type": "string"},
+          "description": "Query params to add/update"
+        },
+        "body": {
+          "description": "Body modifications",
+          "oneOf": [
+            {"type": "object"},
+            {"type": "string"}
+          ]
+        },
+        "vars": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Variables to update in context"
+        }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "description": "Execution control actions",
+      "properties": {
+        "retry_after_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Delay before retry (for 'retry' decision)"
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Override max retry attempts"
+        },
+        "goto": {
+          "type": "string",
+          "description": "Branch target (for 'branch' decision)"
+        },
+        "extract": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "jsonpath": {"type": "string"},
+              "regex": {"type": "string"},
+              "default": {"type": "string"}
+            }
+          },
+          "description": "Data extraction rules"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Additional metadata for logging/debugging"
+    }
+  }
+}

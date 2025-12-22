@@ -1,0 +1,45 @@
+# Simple Working Example: List Posts → Get Each Post Detail
+# This demonstrates the pattern you need
+
+var api_base = "https://jsonplaceholder.typicode.com"
+
+# First curl: Get list of posts
+request get_all_posts {
+  curl ${api_base}/posts
+
+  extract {
+    post_id_1 = $[0].id
+    post_id_2 = $[1].id
+    post_id_3 = $[2].id
+  }
+
+  assert status == 200
+}
+
+# Second curl: Get post 1
+request get_post_1 {
+  curl ${api_base}/posts/${post_id_1}
+  assert status == 200
+}
+
+# Second curl: Get post 2
+request get_post_2 {
+  curl ${api_base}/posts/${post_id_2}
+  assert status == 200
+}
+
+# Second curl: Get post 3
+request get_post_3 {
+  curl ${api_base}/posts/${post_id_3}
+  assert status == 200
+}
+
+# Scenario: Sequential execution
+scenario posts_flow {
+  load {
+    vus = 3
+    duration = 20s
+  }
+
+  run get_all_posts -> get_post_1 -> get_post_2 -> get_post_3
+}

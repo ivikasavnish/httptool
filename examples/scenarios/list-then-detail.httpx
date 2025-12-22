@@ -1,0 +1,42 @@
+# List Posts → Get Each Post Detail
+# Real-world pattern: Get list of items, then fetch each item's details
+
+var base_url = "https://jsonplaceholder.typicode.com"
+
+# Step 1: Get list of posts
+request list_posts {
+  curl ${base_url}/posts
+
+  extract {
+    posts = $
+  }
+
+  assert {
+    status == 200
+  }
+}
+
+# Step 2: Get individual post detail
+# This will run for each post from the list
+request get_post_detail {
+  curl ${base_url}/posts/${post.id}
+
+  assert {
+    status == 200
+    body.id == ${post.id}
+  }
+}
+
+# Scenario: List all posts, then get details for each
+scenario list_and_detail {
+  load {
+    vus = 2
+    duration = 30s
+  }
+
+  # Get list first
+  run list_posts {
+    # For each post in the list, get its details
+    run get_post_detail
+  }
+}
