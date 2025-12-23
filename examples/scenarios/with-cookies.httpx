@@ -1,0 +1,68 @@
+# Example: Cookie Management Across Requests
+#
+# This demonstrates:
+# 1. Automatic cookie retention across requests
+# 2. Manual cookie extraction (if needed)
+# 3. Cookies persisting through the request chain
+
+var base_url = "https://httpbin.org"
+
+# Step 1: Login (sets cookies)
+request login {
+  curl -X POST ${base_url}/cookies/set?session=abc123&user_id=42
+
+  # Cookies are automatically captured and stored!
+  # But you can also extract them manually if needed:
+  extract {
+    session_cookie = cookie:session
+    user_id_cookie = cookie:user_id
+  }
+
+  assert status in [200, 302]
+}
+
+# Step 2: Get user data (uses cookies automatically)
+request get_user_data {
+  # Cookies from previous request are automatically included!
+  curl ${base_url}/cookies
+
+  # Response will show the cookies were sent
+  assert {
+    status == 200
+  }
+}
+
+# Step 3: Update settings (still using cookies)
+request update_settings {
+  # Cookies persist through the entire chain
+  curl -X POST ${base_url}/cookies \
+    -H "Content-Type: application/json" \
+    -d '{"theme":"dark"}'
+
+  assert status == 200
+}
+
+# Scenario: Automatic cookie management
+scenario cookie_flow {
+  load {
+    vus = 3
+    duration = 20s
+  }
+
+  # All requests share cookies automatically!
+  run login -> get_user_data -> update_settings
+}
+
+# Alternative: Nested flow
+scenario cookie_nested {
+  load {
+    vus = 2
+    duration = 15s
+  }
+
+  run login {
+    run get_user_data {
+      run update_settings
+    }
+  }
+}

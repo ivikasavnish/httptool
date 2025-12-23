@@ -12,11 +12,15 @@ import (
 
 func handleScenarioRun() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: httptool scenario run <scenario.httpx> [--scenario name] [--vus N] [--duration D]")
+		fmt.Fprintln(os.Stderr, "Usage: httptool scenario run <scenario.httpx> [--scenario name] [--vus N] [--duration D] [--progress] [--verbose]")
 		os.Exit(1)
 	}
 
 	scenarioFile := os.Args[3]
+
+	// Check for flags
+	showProgress := hasFlag(os.Args, "--progress")
+	verbose := hasFlag(os.Args, "--verbose") || os.Getenv("VERBOSE") == "1"
 
 	// Read scenario file
 	data, err := os.ReadFile(scenarioFile)
@@ -88,6 +92,15 @@ func handleScenarioRun() {
 	fmt.Printf("\n🏃 Executing scenario...\n\n")
 	executor := scenario.NewExecutor()
 
+	// Setup progress tracking
+	var progressChan chan scenario.ProgressUpdate
+	var progressDone chan bool
+	if showProgress {
+		progressChan = executor.EnableProgress()
+		progressDone = make(chan bool)
+		go printProgress(progressChan, progressDone, verbose)
+	}
+
 	startTime := time.Now()
 	result, err := executor.Execute(context.Background(), compiled)
 	if err != nil {
@@ -95,8 +108,14 @@ func handleScenarioRun() {
 		os.Exit(1)
 	}
 
+	// Wait for progress printer to finish
+	if showProgress {
+		close(progressChan)
+		<-progressDone
+	}
+
 	// Print results
-	printScenarioResults(result, startTime)
+	printScenarioResults(result, startTime, verbose)
 }
 
 func handleScenarioValidate() {
@@ -192,7 +211,70 @@ func handleScenarioConvert() {
 	fmt.Printf("Teardown: %d requests\n", len(compiled.Teardown))
 }
 
-func printScenarioResults(result *scenario.ScenarioResult, startTime time.Time) {
+func printProgress(progressChan chan scenario.ProgressUpdate, done chan bool, verbose bool) {
+	defer func() { done <- true }()
+
+	requestCount := 0
+	errorCount := 0
+	activeVUs := make(map[int]bool)
+	lastUpdate := time.Now()
+
+	for update := range progressChan {
+		switch update.Type {
+		case "vu_start":
+			activeVUs[update.VUID] = true
+			if verbose {
+				fmt.Printf("[%s] VU %d started\n", update.Timestamp.Format("15:04:05"), update.VUID)
+			}
+
+		case "iteration_start":
+			if verbose {
+				fmt.Printf("[%s] VU %d → iteration %d\n",
+					update.Timestamp.Format("15:04:05"), update.VUID, update.Iteration)
+			}
+
+		case "request":
+			requestCount++
+			if update.Error != "" {
+				errorCount++
+				if verbose {
+					fmt.Printf("[%s] VU %d ✗ %s - ERROR: %s\n",
+						update.Timestamp.Format("15:04:05"), update.VUID, update.RequestName, update.Error)
+				}
+			} else {
+				statusSymbol := "✓"
+				if update.Status >= 400 {
+					statusSymbol = "✗"
+					errorCount++
+				}
+				if verbose {
+					fmt.Printf("[%s] VU %d %s %s - %d (%dms)\n",
+						update.Timestamp.Format("15:04:05"), update.VUID, statusSymbol,
+						update.RequestName, update.Status, update.Latency.Milliseconds())
+				}
+			}
+
+			// Print progress summary every 2 seconds
+			if time.Since(lastUpdate) >= 2*time.Second {
+				fmt.Printf("\r🔄 Progress: %d requests | %d errors | %d active VUs",
+					requestCount, errorCount, len(activeVUs))
+				lastUpdate = time.Now()
+			}
+
+		case "vu_done":
+			delete(activeVUs, update.VUID)
+			if verbose {
+				fmt.Printf("[%s] VU %d completed\n", update.Timestamp.Format("15:04:05"), update.VUID)
+			}
+		}
+	}
+
+	// Final progress update
+	fmt.Printf("\r✓ Completed: %d requests | %d errors                    \n\n",
+		requestCount, errorCount)
+}
+
+func printScenarioResults(result *scenario.ScenarioResult, startTime time.Time, verbose bool) {
 	duration := result.EndTime.Sub(result.StartTime)
 
 	fmt.Println("\n" + strings.Repeat("=", 70))
@@ -234,10 +316,32 @@ func printScenarioResults(result *scenario.ScenarioResult, startTime time.Time) 
 	fmt.Println()
 
 	// Show per-VU summary if verbose
-	if os.Getenv("VERBOSE") == "1" {
+	if verbose {
 		fmt.Println("Per-VU Results:")
 		for _, vu := range result.VUResults {
-			fmt.Printf("  VU %d: %d iterations\n", vu.VUID, len(vu.Iterations))
+			successCount := 0
+			errorCount := 0
+			totalLatency := time.Duration(0)
+
+			for _, iter := range vu.Iterations {
+				for _, req := range iter.Requests {
+					if req.Error != "" || req.AssertionsFailed > 0 {
+						errorCount++
+					} else {
+						successCount++
+					}
+					totalLatency += req.Latency
+				}
+			}
+
+			avgLatency := time.Duration(0)
+			totalReqs := successCount + errorCount
+			if totalReqs > 0 {
+				avgLatency = totalLatency / time.Duration(totalReqs)
+			}
+
+			fmt.Printf("  VU %d: %d iterations, %d requests (✓ %d, ✗ %d), avg latency: %dms\n",
+				vu.VUID, len(vu.Iterations), totalReqs, successCount, errorCount, avgLatency.Milliseconds())
 		}
 		fmt.Println()
 	}

@@ -1,0 +1,32 @@
+# Voter Outreach 
+
+var base_url = "https://staging-vo-go.ccdms.in"
+
+# List of Program visible to users
+
+request list_program {
+    curl 'https://staging-vo-go.ccdms.in/api/v1/user/programs?limit=10' \
+  -H 'accept: application/json' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'cache-control: no-cache' \
+  -b '_ga=GA1.2.375583037.1758801861; _gid=GA1.2.111205617.1766381565; saral_session=MTc2NjM4MzA4NHxOd3dBTkRZelRVNUtSRkZFUVROS1R6YzBTRlJPTmtGV1JWQlRRMHBWTXpkSlNFODNWRkkwVGxOUVNVRTBUMDlMUlZoVVV6UXpOa0U9fJ6brwbdMmOlnbbV6_Y0-CkAhxBTG9GYgLbEP7Dgdh9E; _clck=l8qb2m%5E2%5Eg22%5E0%5E2102; _clsk=819l8n%5E1766409673990%5E4%5E1%5Ey.clarity.ms%2Fcollect; _gat=1; _ga_VN2XQ5ST3D=GS2.2.s1766473383$o30$g1$t1766473383$j60$l0$h0' \
+  -H 'pragma: no-cache' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://staging-vo-go.ccdms.in/' \
+  -H 'sec-ch-ua: "Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36' \
+  -H 'user-language: hn'
+
+  assert status = 200
+}
+
+
+scenario with_retry {
+    load 10 vus for 1m
+    run list_program
+}

@@ -427,6 +427,15 @@ func (p *Parser) parseLoad(scenarioDef *ScenarioDefinition, line string) error {
 		return nil
 	}
 
+	// Shorthand: load 100 rps for 30s
+	rpsRe := regexp.MustCompile(`load\s+(\d+)\s+rps\s+for\s+(\S+)`)
+	rpsMatches := rpsRe.FindStringSubmatch(line)
+	if len(rpsMatches) == 3 {
+		fmt.Sscanf(rpsMatches[1], "%d", &scenarioDef.Load.RPS)
+		scenarioDef.Load.Duration = rpsMatches[2]
+		return nil
+	}
+
 	// Inline: load: vus=10, duration=5m
 	if strings.Contains(line, ":") {
 		parts := strings.Split(line, ":")[1]

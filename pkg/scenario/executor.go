@@ -17,15 +17,52 @@ import (
 
 // Executor runs compiled scenarios
 type Executor struct {
-	httpExecutor *executor.Executor
-	evalManager  *evaluator.Manager
+	httpExecutor   *executor.Executor
+	evalManager    *evaluator.Manager
+	cookieJar      *executor.CookieJar
+	progressChan   chan ProgressUpdate
+	enableProgress bool
+}
+
+// ProgressUpdate represents a progress update during execution
+type ProgressUpdate struct {
+	Type        string // "vu_start", "iteration", "request", "vu_done"
+	VUID        int
+	Iteration   int
+	RequestName string
+	Status      int
+	Latency     time.Duration
+	Error       string
+	Timestamp   time.Time
 }
 
 // NewExecutor creates a new scenario executor
 func NewExecutor() *Executor {
+	cookieJar := executor.NewCookieJar()
 	return &Executor{
-		httpExecutor: executor.NewExecutor(),
-		evalManager:  evaluator.NewManager(5 * time.Second),
+		httpExecutor:   executor.NewExecutorWithCookieJar(cookieJar),
+		evalManager:    evaluator.NewManager(5 * time.Second),
+		cookieJar:      cookieJar,
+		progressChan:   make(chan ProgressUpdate, 1000),
+		enableProgress: false,
+	}
+}
+
+// EnableProgress turns on progress reporting
+func (e *Executor) EnableProgress() chan ProgressUpdate {
+	e.enableProgress = true
+	return e.progressChan
+}
+
+// sendProgress sends a progress update if enabled
+func (e *Executor) sendProgress(update ProgressUpdate) {
+	if e.enableProgress {
+		update.Timestamp = time.Now()
+		select {
+		case e.progressChan <- update:
+		default:
+			// Channel full, skip this update
+		}
 	}
 }
 
@@ -65,7 +102,7 @@ func (e *Executor) Execute(ctx context.Context, scenario *CompiledScenario) (*Sc
 	// Execute based on load config
 	if scenario.Load.VUs > 0 && scenario.Load.Duration != "" {
 		e.executeVUs(ctx, scenario, result)
-	} else if scenario.Load.RPS > 0 {
+	} else if scenario.Load.RPS > 0 && scenario.Load.Duration != "" {
 		e.executeRPS(ctx, scenario, result)
 	} else if scenario.Load.Iterations > 0 {
 		e.executeIterations(ctx, scenario, result)
@@ -105,6 +142,11 @@ func (e *Executor) executeVUs(ctx context.Context, scenario *CompiledScenario, r
 		go func(vuID int) {
 			defer wg.Done()
 
+			e.sendProgress(ProgressUpdate{
+				Type: "vu_start",
+				VUID: vuID,
+			})
+
 			vuResult := &VUResult{
 				VUID:       vuID,
 				Iterations: make([]*IterationResult, 0),
@@ -118,10 +160,21 @@ func (e *Executor) executeVUs(ctx context.Context, scenario *CompiledScenario, r
 				default:
 				}
 
+				e.sendProgress(ProgressUpdate{
+					Type:      "iteration_start",
+					VUID:      vuID,
+					Iteration: iteration,
+				})
+
 				iterResult := e.executeIteration(ctx, scenario, vuID, iteration, result.SetupVars)
 				vuResult.Iterations = append(vuResult.Iterations, iterResult)
 				iteration++
 			}
+
+			e.sendProgress(ProgressUpdate{
+				Type: "vu_done",
+				VUID: vuID,
+			})
 
 			mu.Lock()
 			result.VUResults = append(result.VUResults, vuResult)
@@ -272,12 +325,29 @@ func (e *Executor) executeNode(ctx context.Context, node *RequestNode, vu int, i
 	if err != nil {
 		reqResult.Error = err.Error()
 		iterResult.Requests = append(iterResult.Requests, reqResult)
+		e.sendProgress(ProgressUpdate{
+			Type:        "request",
+			VUID:        vu,
+			Iteration:   iter,
+			RequestName: node.IR.Request.Method + " " + node.IR.Request.URL,
+			Error:       err.Error(),
+		})
 		return
 	}
 
 	reqResult.Status = execCtx.Response.Status
 	reqResult.Latency = time.Duration(execCtx.Response.LatencyMs * 1000000)
 	reqResult.Size = execCtx.Response.SizeBytes
+
+	// Send progress update
+	e.sendProgress(ProgressUpdate{
+		Type:        "request",
+		VUID:        vu,
+		Iteration:   iter,
+		RequestName: node.IR.Request.Method + " " + node.IR.Request.URL,
+		Status:      reqResult.Status,
+		Latency:     reqResult.Latency,
+	})
 
 	// Check assertions
 	for _, assertion := range node.Assert {
@@ -392,9 +462,34 @@ func (e *Executor) extractVariables(execCtx *ir.EvaluationContext, extractRules 
 				extracted[varName] = value
 			}
 		}
+
+		// Cookie extraction: cookie:cookie-name
+		if strings.HasPrefix(rule, "cookie:") {
+			cookieName := strings.TrimPrefix(rule, "cookie:")
+			if value, ok := execCtx.Response.Headers["Set-Cookie"]; ok {
+				// Parse cookie from Set-Cookie header
+				// Simple extraction - get value after cookie name
+				if strings.Contains(value, cookieName+"=") {
+					extracted[varName] = e.extractCookieValue(value, cookieName)
+				}
+			}
+		}
 	}
 
 	return extracted
+}
+
+func (e *Executor) extractCookieValue(setCookieHeader, cookieName string) string {
+	// Simple cookie value extraction
+	// Format: "name=value; ..."
+	parts := strings.Split(setCookieHeader, ";")
+	for _, part := range parts {
+		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		if len(kv) == 2 && kv[0] == cookieName {
+			return kv[1]
+		}
+	}
+	return ""
 }
 
 func (e *Executor) extractJSONPath(body any, path string) any {

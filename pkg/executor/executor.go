@@ -16,7 +16,8 @@ import (
 
 // Executor executes HTTP requests from IR (no business logic)
 type Executor struct {
-	client *http.Client
+	client    *http.Client
+	cookieJar *CookieJar
 }
 
 // NewExecutor creates a new HTTP executor
@@ -27,6 +28,19 @@ func NewExecutor() *Executor {
 				return http.ErrUseLastResponse // Let IR control redirects
 			},
 		},
+		cookieJar: NewCookieJar(),
+	}
+}
+
+// NewExecutorWithCookieJar creates an executor with a specific cookie jar
+func NewExecutorWithCookieJar(jar *CookieJar) *Executor {
+	return &Executor{
+		client: &http.Client{
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse // Let IR control redirects
+			},
+		},
+		cookieJar: jar,
 	}
 }
 
@@ -52,6 +66,14 @@ func (e *Executor) Execute(irSpec *ir.IR) (*ir.EvaluationContext, error) {
 	req, err := e.buildRequest(irSpec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+
+	// Add cookies from jar
+	if e.cookieJar != nil {
+		jarCookies, _ := e.cookieJar.GetCookies(req.URL.String())
+		for _, cookie := range jarCookies {
+			req.AddCookie(cookie)
+		}
 	}
 
 	// Execute request
@@ -97,6 +119,14 @@ func (e *Executor) Execute(irSpec *ir.IR) (*ir.EvaluationContext, error) {
 	ctx.Response.Status = resp.StatusCode
 	ctx.Response.Headers = flattenHeaders(resp.Header)
 
+	// Extract and store cookies from response
+	if e.cookieJar != nil {
+		responseCookies := resp.Cookies()
+		if len(responseCookies) > 0 {
+			e.cookieJar.SetCookies(req.URL.String(), responseCookies)
+		}
+	}
+
 	// Read body
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -115,6 +145,11 @@ func (e *Executor) Execute(irSpec *ir.IR) (*ir.EvaluationContext, error) {
 	}
 
 	return ctx, nil
+}
+
+// GetCookieJar returns the executor's cookie jar
+func (e *Executor) GetCookieJar() *CookieJar {
+	return e.cookieJar
 }
 
 func (e *Executor) buildTransport(transport *ir.Transport) *http.Transport {
